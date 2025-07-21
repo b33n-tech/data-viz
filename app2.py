@@ -6,7 +6,7 @@ import plotly.express as px
 st.set_page_config(page_title="Tableau croisé dynamique", layout="wide")
 
 st.title("📊 Outil Tableau Croisé + Diagramme")
-st.markdown("Charge un fichier `.xlsx`, choisis tes colonnes, et obtiens un tableau croisé et un graphique visuel !")
+st.markdown("Charge un fichier `.xlsx`, choisis tes colonnes, et obtiens un tableau croisé + graphique !")
 
 uploaded_file = st.file_uploader("📁 Upload ton fichier Excel (.xlsx)", type="xlsx")
 
@@ -17,7 +17,6 @@ if uploaded_file:
         st.success("✅ Fichier chargé avec succès")
         st.write("🔍 Colonnes détectées :", list(df.columns))
 
-        # Sélections des colonnes
         row_var = st.selectbox("🧱 Axe des lignes (ex: année)", df.columns, key="row")
         col_var_1 = st.selectbox("🏷️ Colonne principale (ex: région)", df.columns, key="col1")
         col_var_2 = st.selectbox("🏷️ Colonne emboîtée (ex: succès/échec)", df.columns, key="col2")
@@ -27,7 +26,6 @@ if uploaded_file:
 
         if st.button("🧮 Générer le tableau croisé"):
             try:
-                # Construction du tableau croisé
                 pivot_table = pd.pivot_table(
                     df,
                     index=row_var,
@@ -43,19 +41,29 @@ if uploaded_file:
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                     pivot_table.to_excel(writer, sheet_name='Pivot')
-                    writer.close()
-                    st.download_button(
-                        label="📥 Télécharger le tableau en .xlsx",
-                        data=buffer.getvalue(),
-                        file_name="tableau_croise.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                st.download_button(
+                    label="📥 Télécharger le tableau en .xlsx",
+                    data=buffer.getvalue(),
+                    file_name="tableau_croise.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
                 # Diagramme
                 st.subheader("📊 Diagramme croisé")
 
                 pivot_reset = pivot_table.reset_index()
-                melted = pivot_reset.melt(id_vars=row_var, var_name=["Groupe1", "Groupe2"], value_name="Valeur")
+
+                # Aplatir colonnes multiindex en colonnes simples
+                pivot_reset.columns = [
+                    '_'.join(map(str, col)).strip('_') if isinstance(col, tuple) else col
+                    for col in pivot_reset.columns
+                ]
+
+                # Melt pour préparer le graphique
+                melted = pivot_reset.melt(id_vars=[row_var], var_name="Groupe", value_name="Valeur")
+
+                # Séparer la colonne Groupe en deux pour couleurs et facettes
+                melted[['Groupe1', 'Groupe2']] = melted['Groupe'].str.split('_', expand=True)
 
                 barmode = "stack" if diagram_mode == "Barres empilées" else "group"
                 fig = px.bar(
@@ -74,3 +82,5 @@ if uploaded_file:
 
     except Exception as e:
         st.error(f"❌ Erreur lors de la lecture du fichier : {e}")
+else:
+    st.info("🕓 En attente d'un fichier Excel.")
