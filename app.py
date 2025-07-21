@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="Explorateur Croisé", layout="wide")
-st.title("📊 Tableau et Diagramme Croisé Générique")
+st.set_page_config(page_title="Tableau Croisé Classique", layout="wide")
+st.title("📊 Tableau & Diagramme Croisé - Version Classique Excel")
 
 uploaded_file = st.file_uploader("📥 Upload un fichier Excel (.xlsx)", type=["xlsx"])
 
@@ -15,55 +15,50 @@ if uploaded_file:
 
         cols = df.columns.tolist()
 
-        st.subheader("🎛️ Sélection des dimensions")
-        selected_vars = st.multiselect("Choisis 1 à 3 variables pour explorer les données", cols, max_selections=3)
+        st.subheader("🎛️ Sélection du tableau croisé")
+        index_vars = st.multiselect("📌 Lignes (jusqu'à 3)", cols, max_selections=3)
+        column_var = st.selectbox("📍 Colonnes", [c for c in cols if c not in index_vars])
 
-        if len(selected_vars) < 1:
-            st.warning("🟡 Choisis au moins une variable.")
-            st.stop()
+        aggfunc = st.selectbox("🧮 Fonction d'agrégation", ["count", "sum", "mean", "max", "min"])
 
-        # Choix de la fonction d'agrégation
-        aggfunc = st.selectbox("🧮 Fonction d'agrégation", ["count", "sum", "mean"])
-
-        # Si count, on ne choisit pas de variable à agréger
         if aggfunc != "count":
-            num_cols = df.select_dtypes(include='number').columns.tolist()
-            value_col = st.selectbox("🔢 Colonne à agréger", num_cols)
+            value_vars = df.select_dtypes(include="number").columns.tolist()
+            value_var = st.selectbox("🔢 Colonne à agréger", value_vars)
         else:
-            value_col = None
+            value_var = None
 
-        # Préparation du dataframe à afficher
-        st.subheader("📋 Résumé croisé")
+        if index_vars and column_var:
+            st.subheader("📋 Tableau croisé")
 
-        # GROUP BY dynamique
-        group = df.groupby(selected_vars)
-        if aggfunc == "count":
-            result = group.size().reset_index(name="Total")
-        else:
-            result = group[value_col].agg(aggfunc).reset_index(name=f"{aggfunc}_{value_col}")
+            try:
+                if aggfunc == "count":
+                    pivot = pd.pivot_table(df, index=index_vars, columns=column_var, aggfunc="size", fill_value=0)
+                else:
+                    pivot = pd.pivot_table(df, index=index_vars, columns=column_var, values=value_var, aggfunc=aggfunc, fill_value=0)
 
-        st.dataframe(result)
+                st.dataframe(pivot)
 
-        # Affichage graphique
-        st.subheader("📊 Visualisation")
+                # Diagramme simple basé sur la 1re variable d'index
+                st.subheader("📊 Diagramme croisé")
 
-        # Mapping des dimensions
-        x = selected_vars[0]
-        color = selected_vars[1] if len(selected_vars) >= 2 else None
-        facet = selected_vars[2] if len(selected_vars) == 3 else None
+                pivot_reset = pivot.reset_index()
+                pivot_melted = pivot_reset.melt(id_vars=index_vars, var_name=column_var, value_name="Valeur")
 
-        value_name = "Total" if aggfunc == "count" else f"{aggfunc}_{value_col}"
+                fig = px.bar(
+                    pivot_melted,
+                    x=index_vars[0],
+                    y="Valeur",
+                    color=column_var,
+                    barmode="group",
+                    facet_row=index_vars[1] if len(index_vars) > 1 else None,
+                    facet_col=index_vars[2] if len(index_vars) > 2 else None,
+                    title="Diagramme croisé",
+                )
 
-        fig = px.bar(
-            result,
-            x=x,
-            y=value_name,
-            color=color,
-            facet_col=facet,
-            barmode="group" if color else "relative",
-            title="Diagramme croisé",
-        )
-        st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Erreur dans le pivot : {e}")
 
     except Exception as e:
-        st.error(f"❌ Erreur : {e}")
+        st.error(f"Erreur de lecture du fichier : {e}")
