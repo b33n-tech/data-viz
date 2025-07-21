@@ -38,8 +38,9 @@ if uploaded_file:
 
                 st.dataframe(pivot)
 
-                # Diagramme simple basé sur la 1re variable d'index
+                # Option de mode d’affichage du graphique
                 st.subheader("📊 Diagramme croisé")
+                bar_mode = st.radio("🧱 Mode de visualisation", ["Colonnes accolées", "Colonnes empilées"])
 
                 pivot_reset = pivot.reset_index()
                 pivot_melted = pivot_reset.melt(id_vars=index_vars, var_name=column_var, value_name="Valeur")
@@ -49,7 +50,7 @@ if uploaded_file:
                     x=index_vars[0],
                     y="Valeur",
                     color=column_var,
-                    barmode="group",
+                    barmode="group" if bar_mode == "Colonnes accolées" else "stack",
                     facet_row=index_vars[1] if len(index_vars) > 1 else None,
                     facet_col=index_vars[2] if len(index_vars) > 2 else None,
                     title="Diagramme croisé",
