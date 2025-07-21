@@ -1,11 +1,19 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from io import BytesIO
 
 st.set_page_config(page_title="Tableau Croisé Classique", layout="wide")
 st.title("📊 Tableau & Diagramme Croisé - Version Classique Excel")
 
 uploaded_file = st.file_uploader("📥 Upload un fichier Excel (.xlsx)", type=["xlsx"])
+
+def to_excel(df: pd.DataFrame) -> bytes:
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=True, sheet_name='Pivot')
+        writer.save()
+    return output.getvalue()
 
 if uploaded_file:
     try:
@@ -37,6 +45,15 @@ if uploaded_file:
                     pivot = pd.pivot_table(df, index=index_vars, columns=column_var, values=value_var, aggfunc=aggfunc, fill_value=0)
 
                 st.dataframe(pivot)
+
+                # Bouton téléchargement XLSX
+                excel_data = to_excel(pivot)
+                st.download_button(
+                    label="⬇️ Télécharger le tableau croisé en XLSX",
+                    data=excel_data,
+                    file_name="tableau_croise.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
                 # Option de mode d’affichage du graphique
                 st.subheader("📊 Diagramme croisé")
