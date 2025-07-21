@@ -12,7 +12,6 @@ def to_excel(df: pd.DataFrame) -> bytes:
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=True, sheet_name='Pivot')
-        writer.save()
     return output.getvalue()
 
 if uploaded_file:
@@ -31,6 +30,9 @@ if uploaded_file:
 
         if aggfunc != "count":
             value_vars = df.select_dtypes(include="number").columns.tolist()
+            if not value_vars:
+                st.warning("Aucune colonne numérique disponible pour l'agrégation.")
+                st.stop()
             value_var = st.selectbox("🔢 Colonne à agréger", value_vars)
         else:
             value_var = None
@@ -42,11 +44,18 @@ if uploaded_file:
                 if aggfunc == "count":
                     pivot = pd.pivot_table(df, index=index_vars, columns=column_var, aggfunc="size", fill_value=0)
                 else:
-                    pivot = pd.pivot_table(df, index=index_vars, columns=column_var, values=value_var, aggfunc=aggfunc, fill_value=0)
+                    pivot = pd.pivot_table(
+                        df,
+                        index=index_vars,
+                        columns=column_var,
+                        values=value_var,
+                        aggfunc=aggfunc,
+                        fill_value=0
+                    )
 
                 st.dataframe(pivot)
 
-                # Bouton téléchargement XLSX
+                # Téléchargement du tableau croisé en Excel
                 excel_data = to_excel(pivot)
                 st.download_button(
                     label="⬇️ Télécharger le tableau croisé en XLSX",
@@ -55,7 +64,7 @@ if uploaded_file:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-                # Option de mode d’affichage du graphique
+                # Diagramme croisé
                 st.subheader("📊 Diagramme croisé")
                 bar_mode = st.radio("🧱 Mode de visualisation", ["Colonnes accolées", "Colonnes empilées"])
 
