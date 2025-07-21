@@ -2,62 +2,68 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="Pivot Explorer", layout="wide")
-st.title("📊 Outil de Tableau & Diagramme Croisé")
+st.set_page_config(page_title="Explorateur Croisé", layout="wide")
+st.title("📊 Tableau et Diagramme Croisé Générique")
 
-# Upload du fichier Excel
 uploaded_file = st.file_uploader("📥 Upload un fichier Excel (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file)
         st.success("✅ Fichier chargé avec succès !")
-
-        st.subheader("👁️ Aperçu des données")
         st.dataframe(df.head())
 
         cols = df.columns.tolist()
 
-        st.subheader("🔧 Configuration du tableau croisé")
+        st.subheader("🎛️ Sélection des dimensions")
+        selected_vars = st.multiselect("Choisis 1 à 3 variables pour explorer les données", cols, max_selections=3)
 
-        # Choix du nombre de variables pour l'index
-        num_index_vars = st.selectbox("🔢 Nombre de variables pour les lignes (index)", [1, 2, 3, 4])
-
-        # Sélection dynamique des index
-        index = st.multiselect(f"🧱 Choisis {num_index_vars} variable(s) pour les lignes", cols, max_selections=num_index_vars)
-        if len(index) != num_index_vars:
-            st.warning(f"⚠️ Tu dois choisir exactement {num_index_vars} variable(s).")
+        if len(selected_vars) < 1:
+            st.warning("🟡 Choisis au moins une variable.")
             st.stop()
 
-        # Sélection des colonnes
-        column = st.selectbox("📐 Colonne", [col for col in cols if col not in index])
-        value = st.selectbox("🔢 Valeur", [col for col in cols if col not in index and col != column])
+        # Choix de la fonction d'agrégation
+        aggfunc = st.selectbox("🧮 Fonction d'agrégation", ["count", "sum", "mean"])
 
-        # Fonction d'agrégation
-        aggfunc = st.selectbox("🧮 Fonction d'agrégation", ["sum", "count", "mean", "max", "min"])
+        # Si count, on ne choisit pas de variable à agréger
+        if aggfunc != "count":
+            num_cols = df.select_dtypes(include='number').columns.tolist()
+            value_col = st.selectbox("🔢 Colonne à agréger", num_cols)
+        else:
+            value_col = None
 
-        # Calcul et affichage du tableau croisé
-        if index and column and value:
-            try:
-                pivot = pd.pivot_table(df, index=index, columns=column, values=value, aggfunc=aggfunc, fill_value=0)
-                st.subheader("📋 Tableau croisé")
-                st.dataframe(pivot)
+        # Préparation du dataframe à afficher
+        st.subheader("📋 Résumé croisé")
 
-                # Affichage du graphique
-                st.subheader("📊 Diagramme croisé")
-                chart_type = st.radio("📌 Type de graphique", ["Barres", "Heatmap"])
+        # GROUP BY dynamique
+        group = df.groupby(selected_vars)
+        if aggfunc == "count":
+            result = group.size().reset_index(name="Total")
+        else:
+            result = group[value_col].agg(aggfunc).reset_index(name=f"{aggfunc}_{value_col}")
 
-                pivot_reset = pivot.reset_index().melt(id_vars=index)
+        st.dataframe(result)
 
-                if chart_type == "Barres":
-                    fig = px.bar(pivot_reset, x=index[0], y="value", color="variable", barmode="group")
-                else:
-                    fig = px.density_heatmap(pivot_reset, x=index[0], y="variable", z="value", color_continuous_scale="Viridis")
+        # Affichage graphique
+        st.subheader("📊 Visualisation")
 
-                st.plotly_chart(fig, use_container_width=True)
+        # Mapping des dimensions
+        x = selected_vars[0]
+        color = selected_vars[1] if len(selected_vars) >= 2 else None
+        facet = selected_vars[2] if len(selected_vars) == 3 else None
 
-            except Exception as e:
-                st.error(f"Erreur dans la création du tableau croisé : {e}")
+        value_name = "Total" if aggfunc == "count" else f"{aggfunc}_{value_col}"
+
+        fig = px.bar(
+            result,
+            x=x,
+            y=value_name,
+            color=color,
+            facet_col=facet,
+            barmode="group" if color else "relative",
+            title="Diagramme croisé",
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
-        st.error(f"Erreur lors de la lecture du fichier : {e}")
+        st.error(f"❌ Erreur : {e}")
